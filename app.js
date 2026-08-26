@@ -1,0 +1,195 @@
+const STORAGE_KEY = 'anip-portal-v3.1';
+const OLD_STORAGE_KEYS = ['anip-portal-v3','anip-portal-v2','anip-portal-v1'];
+const PORTAL_VERSION = 3.1;
+
+const fitDimensions = [
+  ['economicSecurity','Economic Security'],
+  ['quantitative','Quantitative / R'],
+  ['irMethods','IR / Research Methods'],
+  ['japan','Japan / Australia-Japan'],
+  ['policy','Policy Research'],
+  ['learning','Learning Opportunity']
+];
+
+const seed = {
+  "hosts": [],
+  "tasks": [],
+  "questions": [],
+  "qaNotes": [],
+  "profile": {
+    "strengths": "",
+    "interests": "",
+    "goals": "",
+    "workingStyle": ""
+  }
+};
+
+function clone(x){return JSON.parse(JSON.stringify(x));}
+function loadState(){
+  const saved=localStorage.getItem(STORAGE_KEY);
+  if(saved){try{return migrate(JSON.parse(saved));}catch{}}
+  for(const key of OLD_STORAGE_KEYS){
+    const old=localStorage.getItem(key);
+    if(old){try{return migrate(JSON.parse(old));}catch{}}
+  }
+  return clone(seed);
+}
+function migrate(s){
+  const out={...clone(seed),...s};
+  out.hosts=(s.hosts||clone(seed.hosts)).map((h,i)=>({...clone(seed.hosts[i]||seed.hosts[0]),...h,fitScores:h.fitScores||{economicSecurity:3,quantitative:3,irMethods:3,japan:3,policy:3,learning:3},links:h.links||[]}));
+  out.qaNotes=s.qaNotes||clone(seed.qaNotes);
+  return out;
+}
+let state=loadState(); let currentView='dashboard';
+const esc=(s='')=>String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[c]));
+const stars=n=>'★'.repeat(n)+'☆'.repeat(5-n);
+const saveState=()=>localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+const taskProgress=()=>state.tasks.length?Math.round(state.tasks.filter(t=>t.status==='Done').length/state.tasks.length*100):0;
+const hostResearchProgress=()=>state.hosts.length?Math.round(state.hosts.filter(h=>h.status!=='To Research').length/state.hosts.length*100):0;
+const statusClass=s=>s==='Done'?'done':s==='In Progress'||s==='Researching'?'progress':s==='Ready to Apply'||s==='Applied'?'ready':'';
+const avgFit=h=>Math.round(Object.values(h.fitScores||{}).reduce((a,b)=>a+Number(b||0),0)/fitDimensions.length*10)/10;
+
+function render(){renderDashboard();renderHosts();renderCompare();renderTasks();renderQA();renderQuestions();renderLinks();renderProfile();renderData();saveState();}
+
+function renderDashboard(){
+  const pct=taskProgress(), hr=hostResearchProgress(), open=state.tasks.filter(t=>t.status!=='Done'), unanswered=state.questions.filter(q=>!q.answered).length;
+  const counts={todo:state.tasks.filter(t=>t.status==='To Do').length,progress:state.tasks.filter(t=>t.status==='In Progress').length,done:state.tasks.filter(t=>t.status==='Done').length};
+  document.getElementById('dashboard').innerHTML=`
+  <div class="grid grid-4">
+    <div class="card metric-card neutral"><div class="metric-label">Target Hosts</div><div class="metric-value">${state.hosts.length}</div><div class="metric-foot">現在の候補</div></div>
+    <div class="card metric-card ${pct>=70?'good':pct>=35?'':'warn'}"><div class="metric-label">Preparation</div><div class="metric-value">${pct}%</div><div class="progress-wrap"><div class="progress ${pct>=70?'good':''}"><span style="width:${pct}%"></span></div></div><div class="status-strip"><span class="status-count todo">To Do ${counts.todo}</span><span class="status-count progressing">進行中 ${counts.progress}</span><span class="status-count done">完了 ${counts.done}</span></div></div>
+    <div class="card metric-card ${hr>=70?'good':hr>=35?'':'warn'}"><div class="metric-label">Host Research</div><div class="metric-value">${hr}%</div><div class="progress-wrap"><div class="progress ${hr>=70?'good':''}"><span style="width:${hr}%"></span></div></div><div class="metric-foot">調査着手済みのHost割合</div></div>
+    <div class="card metric-card ${unanswered===0?'good':'warn'}"><div class="metric-label">Open Questions</div><div class="metric-value">${unanswered}</div><div class="metric-foot">未解決の質問</div></div>
+  </div>
+  <div class="grid grid-2" style="margin-top:18px">
+    <div class="card"><div class="section-head"><h3>Next Actions</h3><button class="small-btn" onclick="switchView('tasks')">すべて見る</button></div><div class="list">${open.slice(0,5).map(t=>`<div class="list-row"><div class="row-main"><div class="row-title">${esc(t.title)}</div><div class="row-sub">${esc(t.category)}${t.due?' · '+esc(t.due):''}</div></div><span class="badge ${statusClass(t.status)}">${esc(t.status)}</span></div>`).join('')||'<div class="empty">未完了タスクはありません。</div>'}</div></div>
+    <div class="card"><div class="section-head"><h3>Host Fit Snapshot</h3><button class="small-btn" onclick="switchView('compare')">比較を開く</button></div><div class="list">${[...state.hosts].sort((a,b)=>avgFit(b)-avgFit(a)).map(h=>`<div class="list-row"><div class="row-main"><div class="row-title">${esc(h.name)}</div><div class="row-sub">Priority ${h.priority}/5</div></div><div class="compare-score score-${Math.round(avgFit(h))}">${avgFit(h)}/5</div></div>`).join('')}</div></div>
+    <div class="card"><div class="section-head"><h3>Latest ANIP Q&A</h3><button class="small-btn" onclick="switchView('qa')">Q&Aページ</button></div>${state.qaNotes.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,2).map(q=>`<div class="note-box"><div class="qa-date">${esc(q.date)}</div><strong>${esc(q.topic)}</strong><div class="row-sub" style="font-size:13px;margin-top:7px">${esc(q.finding)}</div></div>`).join('')}</div>
+    <div class="card"><div class="section-head"><h3>Preparation Areas</h3></div>${['Application','Host research','Self-analysis','ANIP'].map(cat=>{const a=state.tasks.filter(t=>t.category===cat),p=a.length?Math.round(a.filter(t=>t.status==='Done').length/a.length*100):0;return `<div class="progress-wrap"><div class="progress-label"><strong>${esc(cat)}</strong><span>${p}%</span></div><div class="progress ${p>=70?'good':''}"><span style="width:${p}%"></span></div></div>`}).join('')}</div>
+  </div>`;
+}
+
+function renderHosts(){document.getElementById('hosts').innerHTML=`<div class="toolbar"><button class="primary-btn" onclick="openHostForm()">+ Hostを追加</button><button class="small-btn" onclick="switchView('compare')">Fit比較</button><button class="small-btn" onclick="switchView('links')">リンク集</button></div><div class="grid grid-2">${state.hosts.map(h=>`<div class="card host-card"><div class="host-top"><div><h3 class="host-name">${esc(h.name)}</h3><div class="row-sub">${esc(h.fullName)}</div></div><span class="stars">${stars(h.priority)}</span></div><div class="tags">${(h.fit||[]).slice(0,4).map(x=>`<span class="tag">${esc(x)}</span>`).join('')}</div><div class="host-notes">${esc(h.notes)}</div><div class="list-row" style="margin-top:12px"><span class="badge ${statusClass(h.status)}">${esc(h.status)}</span><div class="action-row"><button class="small-btn" onclick="openHostDetail('${h.id}')">詳細</button><button class="small-btn" onclick="openHostForm('${h.id}')">編集</button></div></div></div>`).join('')}</div>`;}
+
+function renderCompare(){
+  document.getElementById('compare').innerHTML=`<div class="card"><div class="section-head"><div><h3>Host Fit Comparison</h3><div class="row-sub">1 = low fit / 5 = very strong fit。各Hostの「編集」から変更できます。</div></div></div><div class="compare-wrap"><table class="compare-table"><thead><tr><th>Criterion</th>${state.hosts.map(h=>`<th>${esc(h.name)}</th>`).join('')}</tr></thead><tbody>${fitDimensions.map(([k,label])=>`<tr><td>${esc(label)}</td>${state.hosts.map(h=>`<td><span class="compare-score score-${h.fitScores?.[k]||3}">${h.fitScores?.[k]||3}</span></td>`).join('')}</tr>`).join('')}<tr><td>Average Fit</td>${state.hosts.map(h=>`<td><span class="compare-score score-${Math.round(avgFit(h))}">${avgFit(h)}/5</span></td>`).join('')}</tr><tr><td>Priority</td>${state.hosts.map(h=>`<td><span class="stars">${stars(h.priority)}</span></td>`).join('')}</tr><tr><td>Status</td>${state.hosts.map(h=>`<td><span class="badge ${statusClass(h.status)}">${esc(h.status)}</span></td>`).join('')}</tr></tbody></table></div></div>`;
+}
+
+function renderTasks(){
+  document.getElementById('tasks').innerHTML=`<div class="toolbar"><button class="primary-btn" onclick="openTaskForm()">+ タスク追加</button><span class="row-sub">期限を設定するとGoogle / Apple Calendarへ追加できます。</span></div><div class="card"><div class="list">${state.tasks.map(t=>`<div class="list-row"><div class="checkline ${t.status==='Done'?'done':''}"><input type="checkbox" ${t.status==='Done'?'checked':''} onchange="toggleTask('${t.id}',this.checked)"><div class="row-main"><div class="row-title">${esc(t.title)}</div><div class="row-sub">${esc(t.category)}${t.due?' · Due '+esc(t.due):' · 期限未設定'}</div></div></div><div class="action-row"><span class="badge ${statusClass(t.status)}">${esc(t.status)}</span>${t.due?`<button class="calendar-btn" onclick="addGoogleCalendar('${t.id}')">Google Calendar</button><button class="calendar-btn" onclick="downloadICS('${t.id}')">Apple / .ics</button>`:''}<button class="small-btn" onclick="openTaskForm('${t.id}')">編集</button></div></div>`).join('')||'<div class="empty">タスクはありません。</div>'}</div></div>`;
+}
+
+function renderQA(){document.getElementById('qa').innerHTML=`<div class="toolbar"><button class="primary-btn" onclick="openQAForm()">+ Q&Aメモ追加</button></div><div class="grid grid-2">${state.qaNotes.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(q=>`<div class="card qa-card"><div class="qa-date">${esc(q.date)}</div><h3 style="margin-top:6px">${esc(q.topic)}</h3><div class="detail-section"><h4>得た情報</h4><div class="note-box">${esc(q.finding)}</div></div><div class="detail-section" style="margin-top:12px"><h4>応募・Host選びへの影響</h4><div class="note-box">${esc(q.impact)}</div></div><div class="detail-section" style="margin-top:12px"><h4>Next Action</h4><div class="note-box">${esc(q.action)}</div></div><div class="form-actions"><button class="small-btn" onclick="openQAForm('${q.id}')">編集</button></div></div>`).join('')||'<div class="empty">Q&Aメモはありません。</div>'}</div>`;}
+
+function renderQuestions(){document.getElementById('questions').innerHTML=`<div class="toolbar"><button class="primary-btn" onclick="openQuestionForm()">+ 質問を追加</button></div><div class="card"><div class="list">${state.questions.map(q=>`<div class="list-row"><div class="checkline ${q.answered?'done':''}"><input type="checkbox" ${q.answered?'checked':''} onchange="toggleQuestion('${q.id}',this.checked)"><div class="row-main"><div class="row-title">${esc(q.text)}</div><div class="row-sub">Target: ${esc(q.target)}</div></div></div><button class="small-btn" onclick="openQuestionForm('${q.id}')">編集</button></div>`).join('')||'<div class="empty">質問はありません。</div>'}</div></div>`;}
+
+function renderLinks(){document.getElementById('links').innerHTML=`<div class="toolbar"><button class="primary-btn" onclick="openLinkForm()">+ リンク追加</button></div><div class="grid grid-2">${state.hosts.map(h=>`<div class="card"><div class="section-head"><div><h3>${esc(h.name)}</h3><div class="row-sub">${esc(h.fullName)}</div></div><button class="small-btn" onclick="openLinkForm('', '${h.id}')">+ 追加</button></div><div class="link-list">${(h.links||[]).map(l=>`<div class="link-item"><div><a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.title)}</a><div class="link-meta">${esc(l.type||'Reference')} · ${esc(l.url)}</div></div><button class="small-btn" onclick="openLinkForm('${l.id}','${h.id}')">編集</button></div>`).join('')||'<div class="empty">リンクはまだありません。</div>'}</div></div>`).join('')}</div>`;}
+
+function renderProfile(){document.getElementById('profile').innerHTML=`<div class="card"><h3>My ANIP Profile</h3><form id="profile-form"><div class="form-field"><label>Strengths</label><textarea class="textarea" name="strengths">${esc(state.profile.strengths)}</textarea></div><div class="form-field" style="margin-top:14px"><label>Interests</label><textarea class="textarea" name="interests">${esc(state.profile.interests)}</textarea></div><div class="form-field" style="margin-top:14px"><label>What I want to learn</label><textarea class="textarea" name="goals">${esc(state.profile.goals)}</textarea></div><div class="form-field" style="margin-top:14px"><label>Preferred working style</label><textarea class="textarea" name="workingStyle">${esc(state.profile.workingStyle)}</textarea></div><div class="form-actions"><button type="submit" class="primary-btn">保存</button></div></form></div>`;document.getElementById('profile-form').addEventListener('submit',e=>{e.preventDefault();state.profile=Object.fromEntries(new FormData(e.target).entries());render();alert('保存しました。')});}
+
+function switchView(view){currentView=view;document.querySelectorAll('.view').forEach(v=>v.classList.remove('active-view'));document.getElementById(view).classList.add('active-view');document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===view));const titles={dashboard:'Dashboard',hosts:'Target Hosts',compare:'Host Fit Comparison',tasks:'Preparation',qa:'ANIP Q&A Notes',questions:'Question Bank',links:'Host Link Library',profile:'My Profile'};document.getElementById('page-title').textContent=titles[view]||view;}
+function openModal(html){document.getElementById('modal-content').innerHTML=html;document.getElementById('modal').classList.remove('hidden');}
+function closeModal(){document.getElementById('modal').classList.add('hidden');}
+document.addEventListener('click',e=>{if(e.target.matches('[data-close-modal]'))closeModal()});
+document.querySelectorAll('.nav-btn').forEach(btn=>btn.addEventListener('click',()=>switchView(btn.dataset.view)));
+document.getElementById('reset-btn').addEventListener('click',()=>{if(confirm('入力内容を削除して初期データに戻しますか？')){state=clone(seed);render();switchView('dashboard')}});
+
+function openHostDetail(id){const h=state.hosts.find(x=>x.id===id);if(!h)return;openModal(`<h3>${esc(h.name)}</h3><div class="row-sub">${esc(h.fullName)}</div><div class="detail-grid" style="margin-top:20px"><div class="detail-section"><h4>Status / Priority / Fit</h4><div class="kv"><span>Status</span><strong>${esc(h.status)}</strong><span>Priority</span><span class="stars">${stars(h.priority)}</span><span>Average fit</span><strong>${avgFit(h)}/5</strong></div></div><div class="detail-section"><h4>My fit</h4><div class="tags">${(h.fit||[]).map(x=>`<span class="tag">${esc(x)}</span>`).join('')}</div></div><div class="detail-section"><h4>Why interested?</h4><div class="note-box">${esc(h.interest)}</div></div><div class="detail-section"><h4>What I want to learn</h4><div class="note-box">${esc(h.learn)}</div></div><div class="detail-section"><h4>Research notes</h4><div class="note-box">${esc(h.notes)}</div></div></div>`);}
+
+function openHostForm(id=''){const h=id?state.hosts.find(x=>x.id===id):{name:'',fullName:'',priority:3,status:'To Research',fit:[],interest:'',learn:'',notes:'',fitScores:{economicSecurity:3,quantitative:3,irMethods:3,japan:3,policy:3,learning:3},links:[]};openModal(`<h3>${id?'Hostを編集':'Hostを追加'}</h3><form id="host-form"><div class="form-grid"><div class="form-field"><label>Short name</label><input class="input" name="name" value="${esc(h.name)}" required></div><div class="form-field"><label>Full name</label><input class="input" name="fullName" value="${esc(h.fullName)}"></div><div class="form-field"><label>Priority</label><select class="select" name="priority">${[1,2,3,4,5].map(n=>`<option value="${n}" ${h.priority===n?'selected':''}>${n}</option>`).join('')}</select></div><div class="form-field"><label>Status</label><select class="select" name="status">${['To Research','Researching','Ready to Apply','Applied'].map(s=>`<option ${h.status===s?'selected':''}>${s}</option>`).join('')}</select></div></div><div class="form-field" style="margin-top:14px"><label>My fit（カンマ区切り）</label><input class="input" name="fit" value="${esc((h.fit||[]).join(', '))}"></div><h4 style="margin-bottom:10px">Fit scores</h4><div class="form-grid">${fitDimensions.map(([k,label])=>`<div class="form-field"><label>${esc(label)}</label><select class="select" name="fit_${k}">${[1,2,3,4,5].map(n=>`<option value="${n}" ${(h.fitScores?.[k]||3)===n?'selected':''}>${n}</option>`).join('')}</select></div>`).join('')}</div><div class="form-field" style="margin-top:14px"><label>Why interested?</label><textarea class="textarea" name="interest">${esc(h.interest)}</textarea></div><div class="form-field" style="margin-top:14px"><label>What I want to learn</label><textarea class="textarea" name="learn">${esc(h.learn)}</textarea></div><div class="form-field" style="margin-top:14px"><label>Research notes</label><textarea class="textarea" name="notes">${esc(h.notes)}</textarea></div><div class="form-actions">${id?`<button type="button" class="danger-btn" onclick="deleteHost('${id}')">削除</button>`:''}<button class="primary-btn" type="submit">保存</button></div></form>`);document.getElementById('host-form').addEventListener('submit',e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target).entries());const fitScores={};fitDimensions.forEach(([k])=>{fitScores[k]=Number(d[`fit_${k}`]);delete d[`fit_${k}`]});d.priority=Number(d.priority);d.fit=d.fit.split(',').map(x=>x.trim()).filter(Boolean);d.fitScores=fitScores;if(id)Object.assign(state.hosts.find(x=>x.id===id),d);else state.hosts.push({id:crypto.randomUUID(),links:[],...d});closeModal();render()});}
+function deleteHost(id){if(confirm('このHostを削除しますか？')){state.hosts=state.hosts.filter(x=>x.id!==id);closeModal();render()}}
+
+function openTaskForm(id=''){const t=id?state.tasks.find(x=>x.id===id):{title:'',category:'Host research',status:'To Do',due:''};openModal(`<h3>${id?'タスクを編集':'タスク追加'}</h3><form id="task-form"><div class="form-field"><label>Task</label><input class="input" name="title" value="${esc(t.title)}" required></div><div class="form-grid" style="margin-top:14px"><div class="form-field"><label>Category</label><select class="select" name="category">${['Host research','Application','Self-analysis','ANIP','Interview','Other'].map(s=>`<option ${t.category===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="form-field"><label>Status</label><select class="select" name="status">${['To Do','In Progress','Done'].map(s=>`<option ${t.status===s?'selected':''}>${s}</option>`).join('')}</select></div></div><div class="form-field" style="margin-top:14px"><label>Due date</label><input class="input" type="date" name="due" value="${esc(t.due)}"></div><div class="form-actions">${id?`<button type="button" class="danger-btn" onclick="deleteTask('${id}')">削除</button>`:''}<button class="primary-btn" type="submit">保存</button></div></form>`);document.getElementById('task-form').addEventListener('submit',e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target).entries());if(id)Object.assign(state.tasks.find(x=>x.id===id),d);else state.tasks.push({id:crypto.randomUUID(),...d});closeModal();render()});}
+function toggleTask(id,checked){const t=state.tasks.find(x=>x.id===id);if(t){t.status=checked?'Done':'To Do';render()}}
+function deleteTask(id){if(confirm('このタスクを削除しますか？')){state.tasks=state.tasks.filter(x=>x.id!==id);closeModal();render()}}
+
+function addGoogleCalendar(id){const t=state.tasks.find(x=>x.id===id);if(!t?.due)return;const d=t.due.replaceAll('-','');const next=new Date(t.due+'T00:00:00');next.setDate(next.getDate()+1);const y=next.getFullYear(),m=String(next.getMonth()+1).padStart(2,'0'),day=String(next.getDate()).padStart(2,'0');const end=`${y}${m}${day}`;const url=`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(t.title)}&dates=${d}/${end}&details=${encodeURIComponent('ANIP Portal task · '+t.category)}`;window.open(url,'_blank');}
+function downloadICS(id){const t=state.tasks.find(x=>x.id===id);if(!t?.due)return;const start=t.due.replaceAll('-','');const dt=new Date(t.due+'T00:00:00');dt.setDate(dt.getDate()+1);const end=`${dt.getFullYear()}${String(dt.getMonth()+1).padStart(2,'0')}${String(dt.getDate()).padStart(2,'0')}`;const safe=s=>String(s).replace(/([,;\\])/g,'\\$1').replace(/\n/g,'\\n');const ics=`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ANIP Portal//EN\r\nBEGIN:VEVENT\r\nUID:${t.id}@anip-portal\r\nDTSTART;VALUE=DATE:${start}\r\nDTEND;VALUE=DATE:${end}\r\nSUMMARY:${safe(t.title)}\r\nDESCRIPTION:${safe('ANIP Portal task · '+t.category)}\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n`;const blob=new Blob([ics],{type:'text/calendar;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`ANIP-${t.due}-${t.title.replace(/[^a-zA-Z0-9ぁ-んァ-ヶ一-龠_-]/g,'_')}.ics`;a.click();URL.revokeObjectURL(a.href);}
+
+function openQAForm(id=''){const q=id?state.qaNotes.find(x=>x.id===id):{date:new Date().toISOString().slice(0,10),topic:'ANIP Q&A',finding:'',impact:'',action:''};openModal(`<h3>${id?'Q&Aメモを編集':'Q&Aメモを追加'}</h3><form id="qa-form"><div class="form-grid"><div class="form-field"><label>Date</label><input class="input" type="date" name="date" value="${esc(q.date)}"></div><div class="form-field"><label>Topic</label><input class="input" name="topic" value="${esc(q.topic)}"></div></div><div class="form-field" style="margin-top:14px"><label>得た情報</label><textarea class="textarea" name="finding">${esc(q.finding)}</textarea></div><div class="form-field" style="margin-top:14px"><label>応募・Host選びへの影響</label><textarea class="textarea" name="impact">${esc(q.impact)}</textarea></div><div class="form-field" style="margin-top:14px"><label>Next Action</label><textarea class="textarea" name="action">${esc(q.action)}</textarea></div><div class="form-actions">${id?`<button type="button" class="danger-btn" onclick="deleteQA('${id}')">削除</button>`:''}<button class="primary-btn" type="submit">保存</button></div></form>`);document.getElementById('qa-form').addEventListener('submit',e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target).entries());if(id)Object.assign(state.qaNotes.find(x=>x.id===id),d);else state.qaNotes.push({id:crypto.randomUUID(),...d});closeModal();render()});}
+function deleteQA(id){if(confirm('このQ&Aメモを削除しますか？')){state.qaNotes=state.qaNotes.filter(x=>x.id!==id);closeModal();render()}}
+
+function openQuestionForm(id=''){const q=id?state.questions.find(x=>x.id===id):{text:'',target:'ANIP',answered:false};openModal(`<h3>${id?'質問を編集':'質問を追加'}</h3><form id="question-form"><div class="form-field"><label>Question</label><textarea class="textarea" name="text" required>${esc(q.text)}</textarea></div><div class="form-field" style="margin-top:14px"><label>Target</label><input class="input" name="target" value="${esc(q.target)}"></div><div class="form-actions">${id?`<button type="button" class="danger-btn" onclick="deleteQuestion('${id}')">削除</button>`:''}<button class="primary-btn" type="submit">保存</button></div></form>`);document.getElementById('question-form').addEventListener('submit',e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target).entries());if(id)Object.assign(state.questions.find(x=>x.id===id),d);else state.questions.push({id:crypto.randomUUID(),answered:false,...d});closeModal();render()});}
+function toggleQuestion(id,checked){const q=state.questions.find(x=>x.id===id);if(q){q.answered=checked;render()}}
+function deleteQuestion(id){if(confirm('この質問を削除しますか？')){state.questions=state.questions.filter(x=>x.id!==id);closeModal();render()}}
+
+function openLinkForm(linkId='',hostId=''){const h=state.hosts.find(x=>x.id===hostId)||state.hosts[0];const l=linkId?(h.links||[]).find(x=>x.id===linkId):{title:'',url:'',type:'Official'};openModal(`<h3>${linkId?'リンクを編集':'リンクを追加'}</h3><form id="link-form"><div class="form-field"><label>Host</label><select class="select" name="hostId">${state.hosts.map(x=>`<option value="${x.id}" ${x.id===h.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div><div class="form-field" style="margin-top:14px"><label>Title</label><input class="input" name="title" value="${esc(l.title)}" required></div><div class="form-field" style="margin-top:14px"><label>URL</label><input class="input" type="url" name="url" value="${esc(l.url)}" placeholder="https://..." required></div><div class="form-field" style="margin-top:14px"><label>Type</label><select class="select" name="type">${['Official','Research','Careers / Internship','News','Other'].map(x=>`<option ${l.type===x?'selected':''}>${x}</option>`).join('')}</select></div><div class="form-actions">${linkId?`<button type="button" class="danger-btn" onclick="deleteLink('${h.id}','${linkId}')">削除</button>`:''}<button class="primary-btn" type="submit">保存</button></div></form>`);document.getElementById('link-form').addEventListener('submit',e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target).entries());const target=state.hosts.find(x=>x.id===d.hostId);delete d.hostId;if(linkId){const oldHost=state.hosts.find(x=>(x.links||[]).some(l=>l.id===linkId));const existing=oldHost.links.find(x=>x.id===linkId);if(oldHost.id!==target.id)oldHost.links=oldHost.links.filter(x=>x.id!==linkId);Object.assign(existing,d);if(oldHost.id!==target.id)target.links.push(existing);}else target.links.push({id:crypto.randomUUID(),...d});closeModal();render()});}
+function deleteLink(hostId,linkId){if(confirm('このリンクを削除しますか？')){const h=state.hosts.find(x=>x.id===hostId);h.links=(h.links||[]).filter(x=>x.id!==linkId);closeModal();render()}}
+
+
+function dataSummary(){
+  return {
+    hosts: state.hosts.length,
+    tasks: state.tasks.length,
+    qaNotes: state.qaNotes.length,
+    questions: state.questions.length,
+    links: state.hosts.reduce((n,h)=>n+(h.links||[]).length,0)
+  };
+}
+function exportPayload(){
+  return {
+    format:'ANIP Portal Backup',
+    portalVersion:PORTAL_VERSION,
+    exportedAt:new Date().toISOString(),
+    data:clone(state)
+  };
+}
+function downloadText(filename,text,type='application/json;charset=utf-8'){
+  const blob=new Blob([text],{type});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=filename;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),500);
+}
+function exportData(){
+  const now=new Date();
+  const stamp=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  downloadText(`anip-portal-data-${stamp}.json`,JSON.stringify(exportPayload(),null,2));
+  showToast('JSONバックアップを書き出しました。');
+}
+function normalizeImported(raw){
+  const candidate=raw && raw.data && typeof raw.data==='object' ? raw.data : raw;
+  if(!candidate || typeof candidate!=='object') throw new Error('JSONの形式を確認できませんでした。');
+  const required=['hosts','tasks','questions'];
+  for(const key of required){if(!Array.isArray(candidate[key])) throw new Error(`${key} が見つかりません。ANIP PortalのExport JSONを選択してください。`)}
+  if(candidate.qaNotes!==undefined && !Array.isArray(candidate.qaNotes)) throw new Error('qaNotes の形式が正しくありません。');
+  if(candidate.profile!==undefined && (candidate.profile===null || typeof candidate.profile!=='object' || Array.isArray(candidate.profile))) throw new Error('profile の形式が正しくありません。');
+  return migrate(candidate);
+}
+async function importDataFromFile(file){
+  if(!file)return;
+  try{
+    const text=await file.text();
+    const incoming=normalizeImported(JSON.parse(text));
+    const sum={hosts:incoming.hosts.length,tasks:incoming.tasks.length,qaNotes:incoming.qaNotes.length,questions:incoming.questions.length,links:incoming.hosts.reduce((n,h)=>n+(h.links||[]).length,0)};
+    const ok=confirm(`このバックアップを読み込みますか？\n\nHost: ${sum.hosts}\nTask: ${sum.tasks}\nQ&A: ${sum.qaNotes}\nQuestion: ${sum.questions}\nLink: ${sum.links}\n\n現在のブラウザ内データは置き換わります。必要なら先にExportしてください。`);
+    if(!ok)return;
+    state=incoming;saveState();render();switchView('dashboard');
+    showToast('Importが完了しました。');
+  }catch(err){alert('Importできませんでした。\n'+(err?.message||'JSONファイルを確認してください。'));}
+}
+async function copyBackupToClipboard(){
+  try{await navigator.clipboard.writeText(JSON.stringify(exportPayload(),null,2));showToast('バックアップJSONをクリップボードにコピーしました。');}
+  catch{alert('クリップボードへコピーできませんでした。Export JSONをご利用ください。');}
+}
+function showToast(message){
+  let el=document.getElementById('toast');
+  if(!el){el=document.createElement('div');el.id='toast';el.className='toast';document.body.appendChild(el);}
+  el.textContent=message;el.classList.add('show');clearTimeout(showToast._t);showToast._t=setTimeout(()=>el.classList.remove('show'),2400);
+}
+function renderData(){
+  const el=document.getElementById('data');if(!el)return;
+  const s=dataSummary();
+  el.innerHTML=`<div class="grid grid-2">
+    <div class="card backup-card"><div class="backup-icon">↓</div><h3>Export backup</h3><p class="muted">現在のHost、タスク、Q&A、質問、プロフィール、リンクを1つのJSONファイルに保存します。このファイルをChatGPTに共有できます。</p><button class="primary-btn" onclick="exportData()">Export JSON</button><button class="small-btn" onclick="copyBackupToClipboard()">JSONをコピー</button></div>
+    <div class="card backup-card"><div class="backup-icon">↑</div><h3>Import backup</h3><p class="muted">以前ExportしたJSONを読み込みます。Import前に内容の件数を表示し、確認後に現在のデータを置き換えます。</p><button class="primary-btn" onclick="document.getElementById('import-file').click()">Import JSON</button></div>
+  </div>
+  <div class="card" style="margin-top:18px"><div class="section-head"><h3>Current data</h3><span class="badge progress">Portal v${PORTAL_VERSION}</span></div><div class="data-summary">
+    <div><strong>${s.hosts}</strong><span>Hosts</span></div><div><strong>${s.tasks}</strong><span>Tasks</span></div><div><strong>${s.qaNotes}</strong><span>Q&A Notes</span></div><div><strong>${s.questions}</strong><span>Questions</span></div><div><strong>${s.links}</strong><span>Links</span></div>
+  </div><div class="backup-tip"><strong>ChatGPTと共有する場合：</strong> Export JSON → このチャットにJSONファイルをアップロードしてください。ポータル本体のindex.htmlを送る必要はありません。</div></div>`;
+}
+
+Object.assign(window,{switchView,openHostForm,openHostDetail,deleteHost,openTaskForm,toggleTask,deleteTask,addGoogleCalendar,downloadICS,openQAForm,deleteQA,openQuestionForm,toggleQuestion,deleteQuestion,openLinkForm,deleteLink,exportData,copyBackupToClipboard});
+document.getElementById('export-btn')?.addEventListener('click',exportData);
+document.getElementById('import-btn')?.addEventListener('click',()=>document.getElementById('import-file')?.click());
+document.getElementById('import-file')?.addEventListener('change',e=>{const f=e.target.files?.[0];importDataFromFile(f);e.target.value='';});
+render();switchView(currentView);
