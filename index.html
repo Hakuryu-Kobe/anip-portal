@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ANIP Internship Portal v3.1</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">A</div>
+        <div><h1>ANIP Portal</h1><p>Internship Preparation</p></div>
+      </div>
+      <nav class="nav">
+        <button class="nav-btn active" data-view="dashboard">Dashboard</button>
+        <button class="nav-btn" data-view="hosts">Target Hosts</button>
+        <button class="nav-btn" data-view="compare">Fit Compare</button>
+        <button class="nav-btn" data-view="tasks">Preparation</button>
+        <button class="nav-btn" data-view="qa">ANIP Q&A</button>
+        <button class="nav-btn" data-view="questions">Question Bank</button>
+        <button class="nav-btn" data-view="links">Host Links</button>
+        <button class="nav-btn" data-view="profile">My Profile</button>
+        <button class="nav-btn" data-view="data">Data & Backup</button>
+      </nav>
+      <div class="sidebar-note"><strong>保存について</strong><p>入力内容はこのブラウザ内に自動保存されます。Data & BackupからJSONでバックアップできます。</p></div>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <div><p class="eyebrow">ANIP INTERNSHIP PREPARATION</p><h2 id="page-title">Dashboard</h2></div>
+        <div class="top-actions"><button id="export-btn" class="ghost-btn">Export JSON</button><button id="import-btn" class="ghost-btn">Import JSON</button><button id="reset-btn" class="ghost-btn">初期データに戻す</button></div><input id="import-file" type="file" accept="application/json,.json" hidden>
+      </header>
+      <section id="dashboard" class="view active-view"></section>
+      <section id="hosts" class="view"></section>
+      <section id="compare" class="view"></section>
+      <section id="tasks" class="view"></section>
+      <section id="qa" class="view"></section>
+      <section id="questions" class="view"></section>
+      <section id="links" class="view"></section>
+      <section id="profile" class="view"></section>
+      <section id="data" class="view"></section>
+    </main>
+  </div>
+  <div id="modal" class="modal hidden">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-card"><button class="modal-close" data-close-modal>×</button><div id="modal-content"></div></div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
