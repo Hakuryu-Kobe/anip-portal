@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Career Portal v4.1</title>
-  <link rel="stylesheet" href="styles.css?v=4-beta-2" />
+  <title>Career Portal v4.2</title>
+  <link rel="stylesheet" href="styles.css?v=4.2" />
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar">
-      <div class="brand"><div class="brand-mark">C</div><div><h1>Career Portal</h1><p>v4.1 · Career Workspace</p></div></div>
+      <div class="brand"><div class="brand-mark">C</div><div><h1>Career Portal</h1><p>v4.2 · Career Workspace</p></div></div>
       <nav class="nav">
         <button class="nav-btn active" data-view="dashboard">Dashboard</button>
         <button class="nav-btn" data-view="applications">Applications</button>
@@ -17,10 +17,10 @@
         <button class="nav-btn" data-view="career">My Career</button>
         <button class="nav-btn" data-view="resources">Resources</button>
       </nav>
-      <div class="sidebar-note"><strong>v4.1</strong><p>ANIPデータを保持したまま、日本就活の企業・組織マップと月別目標を追加。個人データはこのブラウザのlocalStorageに保存され、GitHubには送信されません。</p></div>
+      <div class="sidebar-note"><strong>v4.2</strong><p>ANIPデータを保持したまま、日本就活の企業・組織マップ、月別目標、Experience Bankを統合。個人データはこのブラウザのlocalStorageに保存され、GitHubには送信されません。</p></div>
     </aside>
     <main class="main">
-      <header class="topbar"><div><p class="eyebrow">CAREER WORKSPACE · v4.1</p><h2 id="page-title">Dashboard</h2></div><div class="top-actions"><button id="export-btn" class="ghost-btn">Export JSON</button><button id="import-btn" class="ghost-btn">Import JSON</button></div><input id="import-file" type="file" accept="application/json,.json" hidden></header>
+      <header class="topbar"><div><p class="eyebrow">CAREER WORKSPACE · v4.2</p><h2 id="page-title">Dashboard</h2></div><div class="top-actions"><button id="export-btn" class="ghost-btn">Export JSON</button><button id="import-btn" class="ghost-btn">Import JSON</button></div><input id="import-file" type="file" accept="application/json,.json" hidden></header>
       <section id="dashboard" class="view active-view"></section>
       <section id="applications" class="view"></section>
       <section id="organizations" class="view"></section>
@@ -29,7 +29,7 @@
     </main>
   </div>
   <div id="modal" class="modal hidden"><div class="modal-backdrop" data-close-modal></div><div class="modal-card"><button class="modal-close" data-close-modal>×</button><div id="modal-content"></div></div></div>
-  <script src="app.js?v=4-beta-2"></script>
+  <script src="app.js?v=4.2"></script>
   <script src="career-map.js?v=4.1"></script>
   <script src="career-goals.js?v=4.1"></script>
 </body>
